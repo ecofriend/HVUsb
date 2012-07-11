@@ -22,14 +22,15 @@ float MaxV;
 CString Prec;
 const char *FWVer;	
 char setVoltage[5];
-float voltage;
+float volts;
+char timer[7];
+int delay;
 
 
 void GetPartInfo(void);
 void SetVoltage(float);
 float GetVoltage(void);
-
-// END USB HV SUPPLY RELATED DECLARATIONS
+void SimulateVoltage(float);
 
 
 #ifdef _DEBUG
@@ -58,8 +59,8 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 		}
 		else
 		{	
-			//aLib = LoadLibrary(_T("AtUsbHid.dll"));				// Load USB HV Supply related DLL (not necessary)
-			usbHVlib = LoadLibrary(_T("usbHVcom.dll"));				// Load USB HV Supply related DLL
+			//aLib = LoadLibrary(_T("AtUsbHid.dll"));				// Not necessary here but is required in the same folder as the EXE.
+			usbHVlib = LoadLibrary(_T("usbHVcom.dll"));				// Load USB HV Supply related DLL. Should also exist in same folder as the EXE.
 
 			if (usbHVlib == NULL)        
 			{
@@ -90,38 +91,44 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 			{
 				Connected = FALSE;
 				ConnAtStart = FALSE;
-				printf("Please check to make sure that the HV USB supply \nis plugged into a working USB port and try again.\n\n");
-				printf("Program will now continue in simulation mode.\n\n");
-				//printf("Program will exit in 5 seconds.");
-				//Sleep(5000);								
-				//exit(-1);
+				printf("HV USB supply not detected. Please make sure it \nis plugged into a working USB port and try again.\n\n");
+				printf("Press \"Esc\" to quit or any other key to continue in simulation mode.\n");
+				if(_getch() == 0x1B)
+				{
+					printf("Program will exit in 5 seconds.");
+					Sleep(5000);								
+					exit(-1);
+				}
+				printf("Program will now continue in simulation mode.\n\n");				
 			}
 			else
 			{
 				Connected = TRUE;
 				ConnAtStart = TRUE;
-				GetPartInfo();				// retrieve part name, max volts, max amps and display
+				GetPartInfo();					// retrieve part name, max volts, max amps and display
 			}
 
-			voltage = GetVoltage();			// get voltage from user
-
+			volts = GetVoltage();				// get voltage from user
+			
+			printf("Enter time delay (in milliseconds) between voltage settings: \n");
+			delay = atoi(gets_s(timer));
 			//printf("voltage: %i", voltage);
 
 			
-			if (voltage <= 0 || voltage > 1000)
+			if (volts <= 0 || volts > 1000)
 			{
 				printf("\n\nVoltage is out of range. Please enter value greater than 0\n");
 				printf("and less than or equal to 1000.\n\n");
-				voltage = GetVoltage();
+				volts = GetVoltage();
 			}
 
 			if (Connected)
 			{
-				SetVoltage(voltage);				// Put in the desired final voltage as argument.
+				SetVoltage(volts);				// Executes when HV USB Supply is connected.
 			}
 			else
 			{
-
+				SimulateVoltage(volts);			// Executes when HV USB Supply isn't found.
 			}
 				
 		}
@@ -140,8 +147,8 @@ int _tmain(int argc, TCHAR* argv[], TCHAR* envp[])
 float GetVoltage(void)
 {
 	printf("Please enter integer value for target voltage (no greater than 1000):\n");
-	gets_s(setVoltage);				// user input of voltage
-	return atof(setVoltage);		// convert user supplied string to float
+	gets_s(setVoltage);						// user input of voltage
+	return atof(setVoltage);				// convert user supplied string to float
 }
 
 void GetPartInfo(void)
@@ -161,13 +168,13 @@ void SetVoltage(float voltage)
 	while (ii < voltage)					// While target voltage hasn't been reached...
 	{
 		DLLCALL(usbHVcom_Vpgm(ii));			// ... set new voltage.
-		Sleep(5000);						// Pause program for 5000 milli-seconds. 
-		ii = ii + 10;						// Increment ii by ten, which will be the new voltage.
+		Sleep(delay);						// Pause program for time (in milliseconds) defined by user. 
+		ii = ii + 10;						// Increment ii by 10, which will be the new voltage.
 	}
 	printf("High voltage set.\n");
 	printf("Press \"Esc\" to power down USB HV Supply.\n\n");
 	bool powerDown = false;
-	while (!powerDown)						// Causes the program to pause by creating an infinite loop.
+	while (!powerDown)						// Causes the program to 'pause' by creating an infinite loop.
 	{
 		if(_getch() == 0x1B)				// Check to see if Escape key was pressed.
 		{			
@@ -178,7 +185,7 @@ void SetVoltage(float voltage)
 	while (ii > 0)							// Reduce voltage loop.
 	{
 		DLLCALL(usbHVcom_Vpgm(ii));
-		Sleep(5000);
+		Sleep(delay);
 		ii = ii - 10;
 	}
 	
@@ -186,5 +193,42 @@ void SetVoltage(float voltage)
 	DLLCALL(usbHVcom_Disable());			// Disable USB HV Supply
 
 	printf("Voltage set to 0 and device disabled.");
-	
+	if(_getch())							// Check to see if a key was pressed.
+	{			
+		exit(-1);							// Exit program
+	}
+}
+
+void SimulateVoltage(float voltage)
+{
+	float ii = 0;
+	while (ii < voltage)					// While target voltage hasn't been reached...
+	{
+		Sleep(delay);						// Pause program for 5000 milli-seconds. 
+		ii = ii + 10;						// Increment ii by 10, which will be the new voltage.
+		printf("***SIMULATION*** Voltage set at %i volts\n", (int)ii);
+	}
+	printf("***SIMULATION*** High voltage set.\n");
+	printf("***SIMULATION*** Press \"Esc\" to power down USB HV Supply.\n\n");
+	bool powerDown = false;
+	while (!powerDown)						// Causes the program to 'pause' by creating an infinite loop.
+	{
+		if(_getch() == 0x1B)				// Check to see if Escape key was pressed.
+		{			
+			powerDown = true;				// If Escape key is pressed, exit the infinite loop.
+		}
+	}
+
+	while (ii > 0)							// Reduce voltage loop.
+	{
+		Sleep(delay);
+		ii = ii - 10;
+		printf("***SIMULATION*** Voltage set at %i volts\n", (int)ii);
+	}
+
+	printf("Simulation over! Please press any key to exit.");
+	if(_getch())							// Check to see if a key was pressed.
+	{			
+		exit(-1);							// Exit program
+	}
 }
